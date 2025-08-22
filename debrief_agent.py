@@ -1,0 +1,100 @@
+from typing import Dict
+from langgraph.constants import Send
+from langgraph.graph import START, END, StateGraph
+from langgraph.types import interrupt, Command
+from typing_extensions import TypedDict
+from zoom_agent import zoom_agent_node
+from notion_agent import notion_agent_node
+from dotenv import load_dotenv
+import os
+from openai import OpenAI
+from tools.debrief_tools import create_summary, create_feedback, create_todo
+from langgraph.prebuilt import create_react_agent
+from langchain_openai import ChatOpenAI
+from utils.get_transcript import load_transcript
+from pydantic import BaseModel
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel
+
+load_dotenv()
+
+client = ChatOpenAI(
+    model="gpt-4o", 
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url="https://yunwu.ai/v1",
+)
+
+class DebriefAgentOutput(BaseModel):
+    summary: str
+    todo: str
+    feedback: str
+    next_step: str
+
+debrief_agent = create_react_agent(
+    model=client,
+    tools=[create_summary, create_feedback, create_todo],
+    prompt=(
+        "You are a helpful assistant that can create summaries, feedback, and todos from a transcript. "
+        "Use the create_summary tool to generate meeting summaries, "
+        "create_todo tool to extract action items, and "
+        "create_feedback tool to provide constructive feedback. "
+        "Always analyze the user's request to determine which tools to use."
+    ),
+    debug=True,
+    response_format=DebriefAgentOutput,
+)
+
+async def debrief_agent_node(state: Dict) -> Dict:
+    print("At DEBRIEF AGENT")
+    
+    user_message = state.get("last_user_message", "")
+    transcript_path = state.get("transcript_path")
+    transcript = load_transcript(transcript_path) if transcript_path else "No transcript provided"
+
+    # === First call: figure out intent ===
+    intent_prompt = [
+        {"role": "system", "content": "You are a classifier. Return ONLY one of: summary, todo, feedback, all."},
+        {"role": "user", "content": f"User message: {user_message}"}
+    ]
+    intent_result = await client.ainvoke(intent_prompt)
+    intent = intent_result.content.strip().lower()
+    print("Detected intent:", intent)
+
+    # === Second call: do the work ===
+    task = ""
+    if intent == "summary":
+        task = "Create a summary of the transcript."
+    elif intent == "todo":
+        task = "Extract a todo list from the transcript."
+    elif intent == "feedback":
+        task = "Provide constructive feedback about the meeting."
+    else:
+        task = "Produce all three: summary, todo, feedback."
+
+    current_step = state.get("next_step", "")
+    output_prompt = [
+        {"role": "system", "content": "You are a helpful assistant for meeting debriefs. Return JSON."},
+        {"role": "user", "content": f"User request: {user_message}\n\n Current step {current_step}\n\n{task}\n\nTranscript:\n{transcript}"}
+    ]
+
+    result = await client.ainvoke(
+        output_prompt,
+        response_format=DebriefAgentOutput  # ensures structured output
+    )
+    print("Result: ", result)
+
+    # Get the parsed structured output
+    parsed: DebriefAgentOutput = result.additional_kwargs["parsed"]
+
+    print("Summary:", parsed.summary)
+    print("Todo:", parsed.todo)
+    print("Feedback:", parsed.feedback)
+    print("Next step:", parsed.next_step)
+        # === Update state ===
+    return {
+        **state,
+        "summary": parsed.summary,
+        "todo": parsed.todo,
+        "feedback": parsed.feedback,
+        "next_step": parsed.next_step,
+    }
