@@ -24,7 +24,6 @@ class DebriefAgentOutput(BaseModel):
     summary: str
     todo: str
     feedback: str
-    next_step: str
     step_summary: str
 
 debrief_agent = create_react_agent(
@@ -35,43 +34,47 @@ debrief_agent = create_react_agent(
         "Use the create_summary tool to generate meeting summaries, "
         "create_todo tool to extract action items, and "
         "create_feedback tool to provide constructive feedback. "
-        "Always analyze the user's request to determine which tools to use."
+        "Always analyze the user's request to determine which tools to use. "
+        "For the step_summary field, describe what you accomplished for the user (e.g., 'Generated meeting summary' or 'Extracted action items from transcript'), "
+        "not the actual content of the summary, todo, or feedback."
     ),
     debug=True,
     response_format=DebriefAgentOutput,
 )
 
 async def debrief_agent_node(state: Dict) -> Dict:
-    print("At DEBRIEF AGENT")
+    print("="*50)
+    print("🤖 DEBRIEF AGENT")
+    print("="*50)
     
     user_message = state.get("last_user_message", "")
     transcript_path = state.get("transcript_path")
     transcript = load_transcript(transcript_path) if transcript_path else "No transcript provided"
 
-    # === First call: figure out intent ===
-    intent_prompt = [
-        {"role": "system", "content": "You are a classifier. Return ONLY one of: summary, todo, feedback, all."},
-        {"role": "user", "content": f"User message: {user_message}"}
-    ]
-    intent_result = await client.ainvoke(intent_prompt)
-    intent = intent_result.content.strip().lower()
-    print("Detected intent:", intent)
+    # # === First call: figure out intent ===
+    # intent_prompt = [
+    #     {"role": "system", "content": "You are a classifier. Return ONLY one of: summary, todo, feedback, all."},
+    #     {"role": "user", "content": f"User message: {user_message}"}
+    # ]
+    # intent_result = await client.ainvoke(intent_prompt)
+    # intent = intent_result.content.strip().lower()
+    # print("[DEBRIEF AGENT] Detected intent:", intent)
 
     # === Second call: do the work ===
-    task = ""
-    if intent == "summary":
-        task = "Create a summary of the transcript."
-    elif intent == "todo":
-        task = "Extract a todo list from the transcript."
-    elif intent == "feedback":
-        task = "Provide constructive feedback about the meeting."
-    else:
-        task = "Produce all three: summary, todo, feedback."
+    # task = ""
+    # if intent == "summary":
+    #     task = "Create a summary of the transcript."
+    # elif intent == "todo":
+    #     task = "Extract a todo list from the transcript."
+    # elif intent == "feedback":
+    #     task = "Provide constructive feedback about the meeting."
+    # else:
+    #     task = "Produce all three: summary, todo, feedback."
 
     current_step = state.get("next_step", "")
     output_prompt = [
         {"role": "system", "content": "You are a helpful assistant for meeting debriefs. Return JSON."},
-        {"role": "user", "content": f"User request: {user_message}\n\n Current step {current_step}\n\n{task}\n\nTranscript:\n{transcript}"}
+        {"role": "user", "content": f"Current task: {current_step}\n\n\n Transcript:\n{transcript}"}
     ]
 
     result = await client.ainvoke(
@@ -83,17 +86,13 @@ async def debrief_agent_node(state: Dict) -> Dict:
     # Get the parsed structured output
     parsed: DebriefAgentOutput = result.additional_kwargs["parsed"]
 
-    print("Summary:", parsed.summary)
-    print("Todo:", parsed.todo)
-    print("Feedback:", parsed.feedback)
-    print("Next step:", parsed.next_step)
-    print("Step summary:", parsed.step_summary)
-        # === Update state ===
+    print("[DEBRIEF AGENT] Step Summary:", parsed.step_summary)
+    print("[DEBRIEF AGENT] Summary:", parsed.summary)
+
     return {
         **state,
         "summary": parsed.summary,
         "todo": parsed.todo,
         "feedback": parsed.feedback,
-        "next_step": parsed.next_step,
         "step_summary": [parsed.step_summary]
     }

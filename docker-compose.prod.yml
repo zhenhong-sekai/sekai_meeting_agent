@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://yunwu.ai/v1}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4o}
+      - ZOOM_ACCOUNT_ID=${ZOOM_ACCOUNT_ID}
+      - ZOOM_CLIENT_ID=${ZOOM_CLIENT_ID}
+      - ZOOM_CLIENT_SECRET=${ZOOM_CLIENT_SECRET}
+      - ZOOM_WEBHOOK_USER=${ZOOM_WEBHOOK_USER}
+      - ZOOM_WEBHOOK_PASS=${ZOOM_WEBHOOK_PASS}
+    restart: unless-stopped
+    networks:
+      - meeting-agent-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - meeting-agent-network
+
+networks:
+  meeting-agent-network:
+    driver: bridge

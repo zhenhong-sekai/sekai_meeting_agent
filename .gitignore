@@ -65,3 +65,33 @@ instance/
 # Temp files
 *.tmp
 *~
+
+# Next.js
+nextjs-app/.next/
+nextjs-app/out/
+nextjs-app/build/
+nextjs-app/.env.local
+nextjs-app/.env.development.local
+nextjs-app/.env.test.local
+nextjs-app/.env.production.local
+nextjs-app/npm-debug.log*
+nextjs-app/yarn-debug.log*
+nextjs-app/yarn-error.log*
+nextjs-app/.pnpm-debug.log*
+nextjs-app/.vercel
+nextjs-app/*.tsbuildinfo
+nextjs-app/next-env.d.ts
+
+# Node.js (general)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm
+.eslintcache
+.stylelintcache
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts

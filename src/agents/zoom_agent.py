@@ -25,7 +25,6 @@ client = ChatOpenAI(
 
 class ZoomAgentOutput(BaseModel):
     transcript_path: str
-    next_step: str
     step_summary: str
 
 zoom_agent = create_react_agent(
@@ -34,7 +33,9 @@ zoom_agent = create_react_agent(
     prompt=(
         "You are a helpful assistant that can find transcript URLs of Zoom meetings. "
         "You can use the zoom_find_transcript tool to get the transcript URL of a Zoom meeting. "
-        "Your job is done when you find the transcript URL of a Zoom meeting and return it to the user.THen its up to user to download the transcript."
+        "Your job is done when you find the transcript URL of a Zoom meeting and return it to the user. Then it's up to user to download the transcript. "
+        "For the step_summary field, describe what you accomplished for the user (e.g., 'Found transcript URL for meeting X' or 'Located recording for meeting Y'), "
+        "not the actual content or URL details."
     ),
     response_format=ZoomAgentOutput,
 )
@@ -59,47 +60,29 @@ async def download_file(download_url: str, filename: Path, token: str):
 
 
 async def zoom_agent_node(state: Dict) -> Dict:
-    print("At ZOOM AGENT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    print("state", state)
+    print("="*50)
+    print("🤖 ZOOM AGENT")
+    print("="*50)
 
     meeting_name = state.get("meeting_name", "Unknown meeting")
     transcript = state.get("transcript") or f"Transcript placeholder for {meeting_name}"
 
-    print("last_user_message", state.get("last_user_message"))
+    next_step = state.get("next_step", "Unknown next step")
     result = await zoom_agent.ainvoke(
-        {"messages": [{"role": "user", "content": f"{state.get('last_user_message')}"}]},
+        {"messages": [{"role": "user", "content": f"This is your current task: {next_step}"}]},
     )
-
-    # print("result", result)
 
     # --- Extract transcript_path from result ---
     transcript_url = result['structured_response'].transcript_path
-    next_step = result['structured_response'].next_step
     step_summary = result['structured_response'].step_summary
-    print("NEXT STEP", next_step)
-    print("TRANSCRIPT URL", transcript_url)
-    # if "messages" in result:
-    #     for msg in result["messages"]:
-    #         # ToolMessages usually contain the JSON with the transcript path
-    #         if hasattr(msg, "content") and isinstance(msg.content, str):
-    #             try:
-    #                 data = json.loads(msg.content)
-    #                 if "transcript_path" in data:
-    #                     transcript_url = data["transcript_path"]
-    #                     break
-    #             except Exception:
-    #                 pass
+
 
     # Fallback if nothing was found
     transcript_url = transcript_url or state.get("transcript_path") or "/tmp/placeholder.txt"
-    # transcript =  load_transcript(transcript_url)
-    # print("transcript", transcript)
-    print("transcript_url", transcript_url)
-    print("STEP SUMMARY", step_summary)
+    print("[ZOOM AGENT] Summary:", step_summary)
     return {
         **state,
         "transcript_path": transcript_url,
-        "next_step": next_step,
         "step_summary": [step_summary]
     }
 

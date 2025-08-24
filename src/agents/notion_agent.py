@@ -23,7 +23,6 @@ client = ChatOpenAI(
 
 class NotionAgentOutput(BaseModel):
     notion_parent_id: str
-    next_step: str
     step_summary: str
 
 
@@ -31,6 +30,9 @@ import asyncio
 from typing import Dict
 
 async def notion_agent_node(state: Dict) -> Dict:
+    print("="*50)
+    print("🤖 NOTION AGENT")
+    print("="*50)
     # Run the async get_notion_tools once synchronously
     notion_tools = await get_notion_tools()
 
@@ -38,26 +40,23 @@ async def notion_agent_node(state: Dict) -> Dict:
     notion_agent = create_react_agent(
         model=client,
         tools=notion_tools,
-        prompt="You are a helpful assistant that can create pages in Notion.Always call for search tool to find the relevant page ids/details first. Then call create tool to create the page if needed",
+        prompt="You are a helpful assistant that can create pages in Notion. Always call for search tool to find the relevant page ids/details first. Then call create tool to create the page if needed. "
+               "For the step_summary field, describe what you accomplished for the user (e.g., 'Created Notion page for meeting results' or 'Published meeting summary to Notion'), "
+               "not the actual page content or Notion page details.",
         # debug=True,
         response_format=NotionAgentOutput,
     )
     user_message = state.get("last_user_message")
     # Run the agent synchronously
     result = await notion_agent.ainvoke(
-        {"messages": [{"role": "user", "content": f"User request:{user_message},Current step: {state.get('next_step')},summary: {state.get('summary')},todo: {state.get('todo')},feedback: {state.get('feedback')}"}]}
+        {"messages": [{"role": "user", "content": f"Current task: {state.get('next_step')},summary: {state.get('summary')},todo: {state.get('todo')},feedback: {state.get('feedback')}"}]}
     )
-    print("result", result)
     notion_parent_id = result['structured_response'].notion_parent_id
-    next_step = result['structured_response'].next_step
     step_summary = result['structured_response'].step_summary
-    print("STEP SUMMARY", step_summary)
-    print("NOTION PARENT ID", notion_parent_id)
-    print("NEXT STEP", next_step)
+    print("[NOTION AGENT] Step Summary:", step_summary)
     updated = {
         **state,
         "notion_parent_id": notion_parent_id,
-        "next_step": next_step,
         "route": "end",  # Always end after notion
         "step_summary": [step_summary]
     }
