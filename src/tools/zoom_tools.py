@@ -1,19 +1,16 @@
-import os
 import time
 import urllib.parse
 import httpx
 import re
 import logging
 from pathlib import Path
-from dotenv import load_dotenv
 from langchain_core.tools import tool
-
-load_dotenv()
+from src.config.settings import settings
 
 # === Zoom App Credentials ===
-ZOOM_ACCOUNT_ID = os.getenv("ZOOM_ACCOUNT_ID")
-ZOOM_CLIENT_ID = os.getenv("ZOOM_CLIENT_ID")
-ZOOM_CLIENT_SECRET = os.getenv("ZOOM_CLIENT_SECRET")
+ZOOM_ACCOUNT_ID = settings.ZOOM_ACCOUNT_ID
+ZOOM_CLIENT_ID = settings.ZOOM_CLIENT_ID
+ZOOM_CLIENT_SECRET = settings.ZOOM_CLIENT_SECRET
 
 # Token cache
 access_token = None
@@ -103,7 +100,7 @@ async def zoom_find_transcript(meeting_name: str) -> dict:
         resp.raise_for_status()
         data = resp.json()
     print(f"[zoom_find_transcript] 📂 Retrieved {len(data.get('meetings', []))} meetings")
-
+    
     meetings = data.get("meetings", [])
     for meeting in meetings:
         topic = meeting.get("topic", "").strip()
@@ -113,7 +110,8 @@ async def zoom_find_transcript(meeting_name: str) -> dict:
 
         if meeting_name not in topic:
             continue
-
+        print("MEETING NAME", meeting_name)
+        print("TOPIC", topic)
         print(f"[zoom_find_transcript] ✅ Match found for topic: {topic}")
         encoded_uuid = urllib.parse.quote(urllib.parse.quote(uuid, safe=""), safe="")
         url = f"https://api.zoom.us/v2/meetings/{encoded_uuid}/recordings"

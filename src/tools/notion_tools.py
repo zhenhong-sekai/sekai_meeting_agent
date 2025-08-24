@@ -1,10 +1,6 @@
-# tools/notion_tools.py
-from dotenv import load_dotenv
+# src/tools/notion_tools.py
 from langchain_mcp_adapters.client import MultiServerMCPClient
-import os
-
-load_dotenv()
-notion_token = os.getenv("NOTION_TOKEN")
+from src.config.settings import settings
 
 client = MultiServerMCPClient({
     "notion": {
@@ -13,7 +9,7 @@ client = MultiServerMCPClient({
         "transport": "stdio",
         "env": {
             "OPENAPI_MCP_HEADERS": (
-                '{"Authorization": "Bearer ' + notion_token + '",'
+                '{"Authorization": "Bearer ' + settings.NOTION_TOKEN + '",'
                 '"Notion-Version": "2022-06-28"}'
             )
         },

@@ -1,6 +1,4 @@
 from typing import Dict
-import os
-from dotenv import load_dotenv
 import pandas as pd
 from typing import List
 from difflib import SequenceMatcher
@@ -12,21 +10,22 @@ from langgraph.graph import StateGraph, START, END
 from typing_extensions import TypedDict
 import time
 from openai import OpenAI
-from tools.notion_tools import get_notion_tools
+from src.tools.notion_tools import get_notion_tools
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel
-load_dotenv()
+from src.config.settings import settings
 
 client = ChatOpenAI(
     model="gpt-4o",
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url="https://yunwu.ai/v1",
+    api_key=settings.OPENAI_API_KEY,
+    base_url=settings.OPENAI_BASE_URL,
 )
 
 class NotionAgentOutput(BaseModel):
     notion_parent_id: str
     next_step: str
+    step_summary: str
+
 
 import asyncio
 from typing import Dict
@@ -51,6 +50,8 @@ async def notion_agent_node(state: Dict) -> Dict:
     print("result", result)
     notion_parent_id = result['structured_response'].notion_parent_id
     next_step = result['structured_response'].next_step
+    step_summary = result['structured_response'].step_summary
+    print("STEP SUMMARY", step_summary)
     print("NOTION PARENT ID", notion_parent_id)
     print("NEXT STEP", next_step)
     updated = {
@@ -58,5 +59,6 @@ async def notion_agent_node(state: Dict) -> Dict:
         "notion_parent_id": notion_parent_id,
         "next_step": next_step,
         "route": "end",  # Always end after notion
+        "step_summary": [step_summary]
     }
     return updated

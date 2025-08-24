@@ -1,23 +1,25 @@
 from typing import Literal, Optional
+import operator
 
 from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
 from typing_extensions import TypedDict
-from zoom_agent import zoom_agent_node
-from debrief_agent import debrief_agent_node
-from notion_agent import notion_agent_node
-from dotenv import load_dotenv
-import os
+from src.agents.zoom_agent import zoom_agent_node
+from src.agents.debrief_agent import debrief_agent_node
+from src.agents.notion_agent import notion_agent_node
+from src.config.settings import settings
 from openai import OpenAI
 import asyncio
 from langchain_openai import ChatOpenAI
-load_dotenv()
-
+from typing_extensions import Annotated
+from langgraph.graph.message import add_messages
+from typing import List
+ 
 client = ChatOpenAI(
-    model="gpt-4o",
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url="https://yunwu.ai/v1",
+    model=settings.MODEL_NAME,
+    api_key=settings.OPENAI_API_KEY,
+    base_url=settings.OPENAI_BASE_URL,
 )
 
 
@@ -31,6 +33,7 @@ class AgentState(TypedDict, total=False):
     feedback: Optional[str]
     notion_parent_id: Optional[str]
     route: Optional[Literal["zoom", "debrief", "notion", "end"]]
+    step_summary: Annotated[List[str], operator.add]
     next_step: Optional[str]
 
 def routing_function(state: AgentState) -> Literal["zoom", "debrief", "notion", "end"]:
@@ -125,12 +128,40 @@ Answer with exactly one token: zoom | debrief | notion | end"""}
     print("decision", decision)
     return {**state, "route": decision}
 
+def log_final_summary(state: AgentState) -> AgentState:
+    """Log the final step_summary at the end of the pipeline"""
+    step_summary = state.get("step_summary", [])
+    
+    # Console logging
+    print("\n" + "="*80)
+    print("🎯 FINAL PIPELINE SUMMARY")
+    print("="*80)
+    print(f"Total steps completed: {len(step_summary)}")
+    print("\n📋 Step Summary History:")
+    for i, summary in enumerate(step_summary, 1):
+        print(f"  {i}. {summary}")
+    print("="*80)
+    print("✅ Pipeline completed successfully!")
+    print("="*80 + "\n")
+    
+    # Create a summary message for the API response
+    summary_text = f"Pipeline completed with {len(step_summary)} steps:\n"
+    for i, summary in enumerate(step_summary, 1):
+        summary_text += f"{i}. {summary}\n"
+    
+    return {
+        **state,
+        "final_summary": summary_text,
+        "step_summary": step_summary  # Keep the existing step_summary
+    }
+
 main_graph = StateGraph(AgentState)
 
 main_graph.add_node("router", router_node)
 main_graph.add_node("zoom", zoom_agent_node)
 main_graph.add_node("debrief", debrief_agent_node)
 main_graph.add_node("notion", notion_agent_node)
+main_graph.add_node("log_summary", log_final_summary)
 
 main_graph.add_edge(START, "router")
 
@@ -139,7 +170,7 @@ targets = {
     "zoom": "zoom",
     "debrief": "debrief",
     "notion": "notion",
-    "end": END
+    "end": "log_summary"
 }
 
 main_graph.add_conditional_edges(
@@ -151,6 +182,9 @@ main_graph.add_conditional_edges(
 main_graph.add_conditional_edges("zoom", routing_function, targets)
 main_graph.add_conditional_edges("debrief", routing_function, targets)
 main_graph.add_conditional_edges("notion", routing_function, targets)
+
+# Add edge from logging node to END
+main_graph.add_edge("log_summary", END)
 
 
 compiled_graph = main_graph.compile()

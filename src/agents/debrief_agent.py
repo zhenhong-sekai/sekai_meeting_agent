@@ -3,25 +3,21 @@ from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
 from typing_extensions import TypedDict
-from zoom_agent import zoom_agent_node
-from notion_agent import notion_agent_node
-from dotenv import load_dotenv
-import os
+from src.agents.zoom_agent import zoom_agent_node
+from src.agents.notion_agent import notion_agent_node
+from src.config.settings import settings
 from openai import OpenAI
-from tools.debrief_tools import create_summary, create_feedback, create_todo
+from src.tools.debrief_tools import create_summary, create_feedback, create_todo
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from utils.get_transcript import load_transcript
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel
-
-load_dotenv()
 
 client = ChatOpenAI(
     model="gpt-4o", 
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url="https://yunwu.ai/v1",
+    api_key=settings.OPENAI_API_KEY,
+    base_url=settings.OPENAI_BASE_URL,
 )
 
 class DebriefAgentOutput(BaseModel):
@@ -29,6 +25,7 @@ class DebriefAgentOutput(BaseModel):
     todo: str
     feedback: str
     next_step: str
+    step_summary: str
 
 debrief_agent = create_react_agent(
     model=client,
@@ -90,6 +87,7 @@ async def debrief_agent_node(state: Dict) -> Dict:
     print("Todo:", parsed.todo)
     print("Feedback:", parsed.feedback)
     print("Next step:", parsed.next_step)
+    print("Step summary:", parsed.step_summary)
         # === Update state ===
     return {
         **state,
@@ -97,4 +95,5 @@ async def debrief_agent_node(state: Dict) -> Dict:
         "todo": parsed.todo,
         "feedback": parsed.feedback,
         "next_step": parsed.next_step,
+        "step_summary": [parsed.step_summary]
     }

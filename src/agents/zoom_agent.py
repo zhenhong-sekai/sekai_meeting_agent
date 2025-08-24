@@ -1,10 +1,6 @@
 from typing import Dict
-from tools.zoom_tools import zoom_find_transcript
-from dotenv import load_dotenv
-import os
-from openai import OpenAI
-import os
-from dotenv import load_dotenv
+from src.tools.zoom_tools import zoom_find_transcript
+from src.config.settings import settings
 import pandas as pd
 from typing import List
 from difflib import SequenceMatcher
@@ -21,17 +17,16 @@ import httpx
 from loguru import logger
 from utils.get_transcript import load_transcript
 
-load_dotenv()
-
 client = ChatOpenAI(
     model="gpt-4o-mini", 
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url="https://yunwu.ai/v1",
+    api_key=settings.OPENAI_API_KEY,
+    base_url=settings.OPENAI_BASE_URL,
 )
 
 class ZoomAgentOutput(BaseModel):
     transcript_path: str
     next_step: str
+    step_summary: str
 
 zoom_agent = create_react_agent(
     model=client,
@@ -80,6 +75,7 @@ async def zoom_agent_node(state: Dict) -> Dict:
     # --- Extract transcript_path from result ---
     transcript_url = result['structured_response'].transcript_path
     next_step = result['structured_response'].next_step
+    step_summary = result['structured_response'].step_summary
     print("NEXT STEP", next_step)
     print("TRANSCRIPT URL", transcript_url)
     # if "messages" in result:
@@ -99,10 +95,12 @@ async def zoom_agent_node(state: Dict) -> Dict:
     # transcript =  load_transcript(transcript_url)
     # print("transcript", transcript)
     print("transcript_url", transcript_url)
+    print("STEP SUMMARY", step_summary)
     return {
         **state,
         "transcript_path": transcript_url,
         "next_step": next_step,
+        "step_summary": [step_summary]
     }
 
 
